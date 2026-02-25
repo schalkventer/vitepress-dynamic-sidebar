@@ -1,4 +1,4 @@
-import { type DefaultTheme } from "vitepress";
+import type { DefaultTheme, UserConfig } from "vitepress";
 import { readdirSync, readFileSync } from "fs";
 import { join, relative, resolve } from "path";
 
@@ -142,27 +142,36 @@ const buildSidebarFromFiles = (
   return result.items || [];
 };
 
-export const createDynamicSidebarConfig = (options: {
-  src?: string;
-  dist?: string;
-  ignore?: string[];
-}): {
-  srcDir: string;
-  outDir: string;
-  sidebar: DefaultTheme.SidebarItem[];
-  allow: string[];
-} => {
-  const { src = "src", dist = "dist", ignore = [] } = options || {};
-  const ROOT_PATH = resolveRootPath("../..");
+/**
+ * Applies Dynamic Sidebar logic.
+ */
+export const withDynamicSidebar = (
+  options: UserConfig & { ignore: string[] },
+): UserConfig => {
+  const { ignore, ...remaining } = options || {};
 
-  const SRC_PATH = resolve(ROOT_PATH, src);
-  const files = getAllMarkdownFilesWithTitle(SRC_PATH, ignore);
+  if (!remaining.srcDir) {
+    throw new Error(
+      "The 'srcDir' option is required when using withDynamicSidebar.",
+    );
+  }
+
+  const files = getAllMarkdownFilesWithTitle(remaining.srcDir, ignore);
   const sidebar = buildSidebarFromFiles(files);
 
   return {
-    srcDir: SRC_PATH,
-    outDir: resolve(ROOT_PATH, dist),
-    sidebar,
-    allow: [ROOT_PATH],
+    ...remaining,
+    themeConfig: {
+      ...remaining.themeConfig,
+      sidebar,
+      outline: "deep",
+    },
+    vite: {
+      server: {
+        fs: {
+          allow: [remaining.srcDir],
+        },
+      },
+    },
   };
 };
