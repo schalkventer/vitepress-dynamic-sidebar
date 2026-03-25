@@ -26,11 +26,15 @@ const IGNORE_FOLDERS = [
 export default defineConfig(
   withDynamicSidebar({
     title: "Example Project",
-    srcDir: "./src",
+    srcDir: ["./client", "./server"],
     ignore: IGNORE_FOLDERS,
   }),
 );
 ```
+
+`srcDir` accepts either a single string or an array of strings. When an array
+is provided, the sidebar scanner walks each listed folder while the generated
+VitePress config uses their shared parent directory as its effective `srcDir`.
 
 ## Structure
 
@@ -39,7 +43,9 @@ export default defineConfig(
 ├── package.json
 ├── .vitepress/
 │   └── config.js
-└── src/
+├── server/
+│   └── ...
+└── client/
     ├── main.js
     └── index.md/
         ├── example-a/

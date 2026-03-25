@@ -1,6 +1,6 @@
 {
   "name": "vitepress-dynamic-sidebar",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "description": "Automatically creates a sidebar in Vitepress based front-matter in your Markdown.",
   "author": "Schalk Venter <venterschalk@gmail.com> (http://schalkventer.me/)",
   "source": "src/index.ts",

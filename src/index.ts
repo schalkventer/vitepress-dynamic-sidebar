@@ -4,6 +4,51 @@ import { join, relative, resolve } from "path";
 
 const resolveRootPath = (root = "."): string => resolve(process.cwd(), root);
 
+const getRelativeRootPath = (rootPath: string): string => {
+  const inner = relative(process.cwd(), rootPath).replace(/\\/g, "/");
+  return inner || ".";
+};
+
+const isSubPath = (rootPath: string, candidatePath: string): boolean => {
+  const normalizedRoot = resolveRootPath(rootPath)
+    .replace(/\\/g, "/")
+    .replace(/\/+$/, "")
+    .toLowerCase();
+  const normalizedCandidate = resolveRootPath(candidatePath)
+    .replace(/\\/g, "/")
+    .replace(/\/+$/, "")
+    .toLowerCase();
+
+  return (
+    normalizedCandidate === normalizedRoot ||
+    normalizedCandidate.startsWith(`${normalizedRoot}/`)
+  );
+};
+
+const getCommonRootPath = (paths: string[]): string => {
+  if (paths.length === 0) {
+    return resolveRootPath();
+  }
+
+  const [firstPath, ...otherPaths] = paths.map(resolveRootPath);
+  let sharedPath = firstPath;
+
+  otherPaths.forEach((candidatePath) => {
+    while (!isSubPath(sharedPath, candidatePath)) {
+      const parentPath = resolve(sharedPath, "..");
+
+      if (parentPath === sharedPath) {
+        sharedPath = resolveRootPath();
+        return;
+      }
+
+      sharedPath = parentPath;
+    }
+  });
+
+  return sharedPath;
+};
+
 /**
  * An object representing the location of a markdown file that has a `title`
  * value in its frontmatter (and what the `title` value is.)
@@ -56,7 +101,8 @@ const extractTitleFromPath = (filePath: string): string | null => {
  *
  */
 const getAllMarkdownFilesWithTitle = (
-  rootPath: string,
+  scanPath: string,
+  linkRootPath: string,
   ignore: string[],
 ): FileMatch[] => {
   const result: FileMatch[] = [];
@@ -79,7 +125,7 @@ const getAllMarkdownFilesWithTitle = (
       const title = extractTitleFromPath(entryPath);
       if (!title) return;
 
-      const inner = relative(rootPath, entryPath)
+      const inner = relative(linkRootPath, entryPath)
         .replace(/\\/g, "/")
         .replace(/\.md$/i, "");
 
@@ -87,7 +133,7 @@ const getAllMarkdownFilesWithTitle = (
     });
   };
 
-  walk(rootPath);
+  walk(scanPath);
   return result;
 };
 
@@ -146,7 +192,10 @@ const buildSidebarFromFiles = (
  * Applies Dynamic Sidebar logic.
  */
 export const withDynamicSidebar = (
-  options: UserConfig & { ignore: string[] },
+  options: Omit<UserConfig, "srcDir"> & {
+    ignore: string[];
+    srcDir: string | string[];
+  },
 ): UserConfig => {
   const { ignore, ...remaining } = options || {};
 
@@ -156,11 +205,19 @@ export const withDynamicSidebar = (
     );
   }
 
-  const files = getAllMarkdownFilesWithTitle(remaining.srcDir, ignore);
+  const srcDirs = (
+    Array.isArray(remaining.srcDir) ? remaining.srcDir : [remaining.srcDir]
+  ).map(resolveRootPath);
+  const vitepressSrcDir = getCommonRootPath(srcDirs);
+  const files = srcDirs.flatMap((srcDir) =>
+    getAllMarkdownFilesWithTitle(srcDir, vitepressSrcDir, ignore),
+  );
   const sidebar = buildSidebarFromFiles(files);
+  const allowPaths = Array.from(new Set([vitepressSrcDir, ...srcDirs]));
 
   return {
     ...remaining,
+    srcDir: getRelativeRootPath(vitepressSrcDir),
     themeConfig: {
       ...remaining.themeConfig,
       sidebar,
@@ -169,7 +226,7 @@ export const withDynamicSidebar = (
     vite: {
       server: {
         fs: {
-          allow: [remaining.srcDir],
+          allow: allowPaths,
         },
       },
     },
